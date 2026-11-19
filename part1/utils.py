@@ -35,17 +35,63 @@ def example_transform(example):
 
 
 def custom_transform(example):
-    ################################
-    ##### YOUR CODE BEGINGS HERE ###
+    qwerty_neighbors = {
+        "a": ["q", "w", "s", "z"],
+        "e": ["w", "s", "d", "r"],
+        "i": ["u", "j", "k", "o"],
+        "o": ["i", "k", "l", "p"],
+        "u": ["y", "h", "j", "i"],
+        "s": ["a", "w", "e", "d", "x", "z"],
+        "t": ["r", "f", "g", "y"],
+        "n": ["b", "h", "j", "m"],
+        "r": ["e", "d", "f", "t"],
+        "l": ["k", "o", "p"],
+    }
 
-    # Design and implement the transformation as mentioned in pdf
-    # You are free to implement any transformation but the comments at the top roughly describe
-    # how you could implement two of them --- synonym replacement and typos.
+    synonym_prob = 0.25  
+    typo_prob = 0.30
 
-    # You should update example["text"] using your transformation
+    detokenizer = TreebankWordDetokenizer()
+    tokens = word_tokenize(example["text"])
+    transformed_tokens = []
 
-    raise NotImplementedError
+    for token in tokens:
+        if not token.isalpha() or len(token) <= 3:
+            transformed_tokens.append(token)
+            continue
 
-    ##### YOUR CODE ENDS HERE ######
+        new_token = token
+
+        if random.random() < synonym_prob:
+            synonyms = set()
+            for syn in wordnet.synsets(token.lower()):
+                for lemma in syn.lemmas():
+                    candidate = lemma.name().replace("_", " ")
+                    if candidate.lower() != token.lower():
+                        synonyms.add(candidate)
+
+            if synonyms:
+                chosen = random.choice(list(synonyms))
+                if token[0].isupper():
+                    chosen = chosen.capitalize()
+                new_token = chosen
+
+        if " " not in new_token and random.random() < typo_prob:
+            chars = list(new_token)
+            eligible_indices = [
+                i for i, ch in enumerate(chars) if ch.lower() in qwerty_neighbors
+            ]
+            if eligible_indices:
+                idx = random.choice(eligible_indices)
+                orig_char = chars[idx]
+                replacement = random.choice(qwerty_neighbors[orig_char.lower()])
+                chars[idx] = (
+                    replacement.upper() if orig_char.isupper() else replacement
+                )
+                new_token = "".join(chars)
+
+        transformed_tokens.append(new_token)
+
+    example["text"] = detokenizer.detokenize(transformed_tokens)
 
     return example
