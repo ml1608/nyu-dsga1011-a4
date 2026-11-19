@@ -3,18 +3,29 @@ title: "DS-GA 1011 Assignment 4: Fine-tuning Language Models"
 author: "Maanas Lalwani"
 geometry: margin=1in
 fontsize: 11pt
+mainfont: Palatino
+monofont: Menlo
+monofontoptions: "Scale=0.85"
+colorlinks: true
+linkcolor: blue
+urlcolor: blue
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{caption}
+  - \captionsetup[table]{labelformat=empty,font=bf,justification=raggedright,singlelinecheck=false}
+  - \renewcommand{\arraystretch}{1.3}
+  - \setlength{\parskip}{0.5em}
 ---
 
 ## Links
 
-- **GitHub repository (Part 1 and Part 2 code):** https://github.com/ml1608/nyu-dsga1011-a4
-- **Google Drive folder (model checkpoint used for Q7 outputs):** https://drive.google.com/file/d/1MnF_eH-GIILkVukFMvRimaCLMM-Eul2v/view?usp=drive_link
+- **GitHub repository (Part 1 and Part 2 code):** <https://github.com/ml1608/nyu-dsga1011-a4>
+- **Google Drive (model checkpoint used for Q7 outputs):** [t5_ft_lr3e4_beam4_best_model.zip](https://drive.google.com/file/d/1MnF_eH-GIILkVukFMvRimaCLMM-Eul2v/view?usp=drive_link)
 
 # Part 1: Fine-tuning BERT for Sentiment Classification
 
 ## Q1. Fine-tune BERT (10 points)
 
-<!-- No written answer required; graded from out_original.txt. Optional one-line summary below. -->
 
 Fine-tuned `bert-base-cased` on the full IMDB training set (3 epochs, lr 5e-5, batch size 8).
 Test accuracy: **93.12%**.
@@ -50,7 +61,6 @@ Overall, this transformation allows me to investigate whether fine-tuned BERT ge
 
 ## Q2b. Implement the transformation (15 points)
 
-<!-- No written answer required; graded from out_transformed.txt. Optional summary below. -->
 
 | Model | Original test | Transformed test | Drop |
 |---|---|---|---|
@@ -83,9 +93,6 @@ One limitation is that the model is trained on the same types of transformations
 
 ## Q4. Data statistics and processing (5 points)
 
-<!-- Use the T5 tokenizer (google-t5/t5-small) to compute these. -->
-
-**Table 1: Data statistics before any pre-processing.**
 
 | Statistics Name | Train | Dev |
 |---|---|---|
@@ -95,7 +102,7 @@ One limitation is that the model is trained on the same types of transformations
 | Vocabulary size (natural language) | 792 | 466 |
 | Vocabulary size (SQL) | 556 | 396 |
 
-**Table 2: Data statistics after pre-processing.**
+Table: Table 1: Data statistics before any pre-processing.
 
 | Statistics Name | Train | Dev |
 |---|---|---|
@@ -105,27 +112,27 @@ One limitation is that the model is trained on the same types of transformations
 | Vocabulary size (natural language) | 792 | 466 |
 | Vocabulary size (SQL) | 556 | 396 |
 
+Table: Table 2: Data statistics after pre-processing.
+
 For preprocessing, I used the `google-t5/t5-small` tokenizer for both natural-language inputs and SQL outputs. I replaced the `<` character in SQL queries with the special token `<extra_id_1>` because the original character was not represented correctly by the tokenizer. This allows the model to learn and generate comparison operators more reliably. The natural-language inputs were left unchanged.
 
 Mean sequence lengths were calculated by averaging the number of T5 tokens per example, including the end-of-sequence token `</s>`. Vocabulary sizes represent the number of distinct token IDs observed in each dataset, rather than the tokenizer's full vocabulary size.
 
 ## Q5. T5 fine-tuning details (10 points)
 
-**Table 3: Details of the best-performing T5 model configuration (fine-tuned).**
-
 | Design choice | Description |
-|---|---|
+|----------|--------------------------------------------|
 | **Data processing** | We used paired natural-language questions and SQL queries from the flight database. Before training, we replaced `<` with `<extra_id_1>` in SQL targets to prevent the comparison operator from becoming an unknown token. Natural-language inputs were left unchanged. Decoder inputs were constructed by prepending `<extra_id_0>` to the target sequence shifted one position to the right, enabling teacher forcing. Sequences were dynamically padded within each batch, with attention masks distinguishing actual tokens from padding. |
 | **Tokenization** | We used `T5TokenizerFast` from `google-t5/t5-small` for both natural-language inputs and SQL outputs. The special token `<extra_id_0>` was used as the decoder start token. During decoding, we set `clean_up_tokenization_spaces=False` to preserve SQL formatting for exact-match evaluation, restored `<extra_id_1>` to `<`, and removed decoding-related special tokens to produce executable SQL queries. |
 | **Architecture** | We initialized the pretrained `google-t5/t5-small` encoder-decoder model with its existing language-modeling head. We fine-tuned all model parameters without freezing layers or adding architectural components, allowing both the encoder and decoder to adapt to text-to-SQL generation. |
 | **Hyperparameters** | We used AdamW with learning rate **3e-4**, weight decay **0**, and a cosine learning-rate scheduler with **one warmup epoch**. Training used batch size **16**, a maximum of **20 epochs**, and early stopping with patience **3**. The checkpoint with the highest development Record F1 was selected at epoch **14**, and training stopped after epoch **17**. For inference, we used beam search with **4 beams** and a maximum of **520 new tokens**. Increasing the learning rate from 1e-4 to 3e-4 improved development Record F1 from **58.63 to 74.42** under greedy decoding. The beam-search configuration further improved F1 to **82.45**, although this experiment also increased the generation cap from 350 to 520 tokens, preventing truncation of 47 long development queries. Therefore, the improvement cannot be attributed solely to beam search. |
 
+Table: Table 3: Details of the best-performing T5 model configuration (fine-tuned).
+
 ## Q6. Results and error analysis (10 points)
 
-**Table 4: Development and test results.**
-
 | System | Query EM | F1 score |
-|---|---|---|
+|------------------------------|----------|----------|
 | **Dev Results** | | |
 | *T5 fine-tuned* | | |
 | Full model (lr 3e-4, beam search with 4 beams, max 520 new tokens) | 59.23 | 82.45 |
@@ -135,17 +142,19 @@ Mean sequence lengths were calculated by averaging the number of T5 tokens per e
 | **Test Results** | | |
 | T5 fine-tuning | 75.46* | 79.14 |
 
+Table: Table 4: Development and test results.
+
 Dev Query EM is exact match on the SQL string. \*The test leaderboard reports only Record EM (exact match on the returned database records), so the test Query EM entry is Record EM.
 
-**Table 5: Qualitative error analysis on the dev set.**
-
 | Error Type | Example of Error | Error Description | Statistics |
-|---|---|---|---|
+|------------|---------------------------|--------------------|-------|
 | SQL execution failure | #23: Flights arriving around 4 p.m. Gold: `arrival_time <= 1630`; predicted: `arrival_time< = 1630` | Invalid SQL caused by malformed operators, structural errors, invalid column references, or timeouts. | 43/466 |
 | Incorrect temporal constraints | #144: Flights after 7 a.m. Gold: `departure_time > 700`; predicted: `departure_time > 1900` | Confuses AM/PM, time ranges, or dates, excluding valid results. | 19/466 |
-| Incorrect route or direction | #239: Reverse a Pittsburgh-to-Denver flight. Gold: Denver → Pittsburgh; predicted: Pittsburgh → Denver | Fails to interpret route reversals, intermediate stops, or return journeys. | 16/466 |
+| Incorrect route or direction | #239: Reverse a Pittsburgh-to-Denver flight. Gold: Denver $\rightarrow$ Pittsburgh; predicted: Pittsburgh $\rightarrow$ Denver | Fails to interpret route reversals, intermediate stops, or return journeys. | 16/466 |
 | Incorrect selected columns | #400: Show flight times. Gold selects `departure_time`, `arrival_time`; prediction selects only `departure_time` | Omits requested fields or returns the wrong database entity. | 13/466 |
 | Missing or incorrect airline filter | #70: Nonstop America West flights. Gold includes `airline_code = 'HP'`; prediction omits it | Loses the airline constraint while preserving other filters. | 7/466 |
+
+Table: Table 5: Qualitative error analysis on the dev set.
 
 Example numbers are 1-indexed line numbers in `data/dev.nl` / `data/dev.sql`. Predictions are from the full model (`results/t5_ft_lr3e4_beam4_dev.sql`).
 
@@ -159,4 +168,12 @@ These categories can overlap and are not intended to account for every SQL misma
 
 ## Q7. Performance evaluation (25 points)
 
-<!-- Graded from t5_ft_experiment_test.sql / t5_ft_experiment_test.pkl on the leaderboard. No written answer required beyond matching Table 4's test row. -->
+The submitted test outputs (`t5_ft_experiment_test.sql` and `t5_ft_experiment_test.pkl`) were generated by the full model described in Table 3: fine-tuned `google-t5/t5-small` with learning rate 3e-4, beam search with 4 beams, and a maximum of 520 new tokens. The checkpoint is available at the Google Drive link above.
+
+| Test metric | Value |
+|---|---|
+| Record F1 | **79.14** |
+| Record EM | **75.46** |
+| Queries that raised SQL errors | 41/432 |
+
+The test Record F1 of 79.14 exceeds the 65 F1 threshold for full credit.
